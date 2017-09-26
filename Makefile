@@ -31,7 +31,7 @@ EXTRA_DATA_FILES = $(shell cat extra_extension_files.txt )
 EXT_GIT_COMMIT := $(shell git describe --abbrev=4 --dirty --always --tags || echo $(EXT_GIT_COMMIT))
 
 DATA = $(EXT_SQL_FILE) $(UPDATE_FILE) $(EXTRA_DATA_FILES)
-MODULE_big = $(EXTENSION)
+MODULE_big = $(EXTENSION)-$(EXT_VERSION)
 
 SRCS = \
 	src/init.c \
@@ -113,11 +113,19 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 EXTRA_CLEAN = $(EXT_SQL_FILE) $(DEPS)
 
 include $(PGXS)
-override CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -MMD -DEXT_GIT_COMMIT=\"$(EXT_GIT_COMMIT)\"
+override CFLAGS += -DINCLUDE_PACKAGE_SUPPORT=0 -MMD -DEXT_GIT_COMMIT=\"$(EXT_GIT_COMMIT)\" -DTIMESCALEDB_EXT_BUILD_VERSION=\"${EXT_VERSION}\"
 override pg_regress_clean_files = test/results/ test/regression.diffs test/regression.out tmp_check/ log/ $(TEST_CLUSTER)
 -include $(DEPS)
 
-all: $(EXT_SQL_FILE) $(UPDATE_FILE) $(SQL_FILES) $(UPDATE_SQL_FILES)
+all: $(EXT_SQL_FILE) $(UPDATE_FILE) $(SQL_FILES) $(UPDATE_SQL_FILES) all-loader
+
+all-loader:
+	make -C loader
+
+install: install-loader
+
+install-loader:
+	make -C loader install
 
 $(EXT_SQL_FILE): $(SQL_FILES)
 	@echo generating $(EXT_SQL_FILE)
@@ -132,7 +140,7 @@ check-sql-files:
 
 install: $(EXT_SQL_FILES)
 
-clean: clean-sql-files clean-extra
+clean: clean-sql-files clean-extra clean-loader
 
 clean-sql-files:
 	@rm -f $(EXT_SQL_FILE) $(UPDATE_FILE)
@@ -141,6 +149,9 @@ clean-extra:
 	@rm -f src/*~
 	@rm -f src/*.d
 	@rm -f src/*.o
+
+clean-loader:
+	make -C loader clean
 
 package: clean $(EXT_SQL_FILE)
 	@mkdir -p package/lib
@@ -158,4 +169,4 @@ pgindent: typedef.list
 manualupdate:
 	echo $(MANUAL_UPDATE_FILES)
 
-.PHONY: check-sql-files all
+.PHONY: check-sql-files all all-loader install-loader clean-loader
